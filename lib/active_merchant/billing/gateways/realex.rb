@@ -31,7 +31,7 @@ module ActiveMerchant
 
       self.money_format = :cents
       self.default_currency = 'EUR'
-      self.supported_cardtypes = [:visa, :master, :american_express, :diners_club]
+      self.supported_cardtypes = %i[visa master american_express diners_club]
       self.supported_countries = %w(IE GB FR BE NL LU IT US CA ES)
       self.homepage_url = 'http://www.realexpayments.com/'
       self.display_name = 'Realex'
@@ -292,13 +292,14 @@ module ActiveMerchant
       def add_address_and_customer_info(xml, options)
         billing_address = options[:billing_address] || options[:address]
         shipping_address = options[:shipping_address]
+        ipv4_address = ipv4?(options[:ip]) ? options[:ip] : nil
 
-        return unless billing_address || shipping_address || options[:customer] || options[:invoice] || options[:ip]
+        return unless billing_address || shipping_address || options[:customer] || options[:invoice] || ipv4_address
 
         xml.tag! 'tssinfo' do
           xml.tag! 'custnum', options[:customer] if options[:customer]
           xml.tag! 'prodid', options[:invoice] if options[:invoice]
-          xml.tag! 'custipaddress', options[:ip] if options[:ip]
+          xml.tag! 'custipaddress', options[:ip] if ipv4_address
 
           if billing_address
             xml.tag! 'address', 'type' => 'billing' do
@@ -366,7 +367,7 @@ module ActiveMerchant
         end
         xml.tag! 'supplementarydata' do
           xml.tag! 'item', 'type' => 'mobile' do
-            xml.tag! 'field01', payment.source.to_s.gsub('_', '-')
+            xml.tag! 'field01', payment.source.to_s.tr('_', '-')
           end
         end
       end
@@ -376,12 +377,13 @@ module ActiveMerchant
 
         version = three_d_secure.fetch(:version, '')
         xml.tag! 'mpi' do
-          if version =~ /^2/
+          if /^2/.match?(version)
             xml.tag! 'authentication_value', three_d_secure[:cavv]
             xml.tag! 'ds_trans_id', three_d_secure[:ds_transaction_id]
           else
             xml.tag! 'cavv', three_d_secure[:cavv]
             xml.tag! 'xid', three_d_secure[:xid]
+            version = '1'
           end
           xml.tag! 'eci', three_d_secure[:eci]
           xml.tag! 'message_version', version
@@ -437,6 +439,12 @@ module ActiveMerchant
         order_id.to_s.gsub(/[^a-zA-Z0-9\-_]/, '')
       end
 
+      def ipv4?(ip_address)
+        return false if ip_address.nil?
+
+        !ip_address.match(/\A\d+\.\d+\.\d+\.\d+\z/).nil?
+      end
+  
       def credit_card_identifier(credit_card)
         credit_card.is_a?(StoredCard) ? credit_card.saved_payer_ref : credit_card.number
       end

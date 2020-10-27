@@ -26,7 +26,7 @@ class RemoteCredoraxTest < Test::Unit::TestCase
       execute_threed: true,
       three_ds_version: '2',
       three_ds_challenge_window_size: '01',
-      stored_credential: {reason_type: 'unscheduled'},
+      stored_credential: { reason_type: 'unscheduled' },
       three_ds_2: {
         channel: 'browser',
         notification_url: 'www.example.com',
@@ -190,7 +190,7 @@ class RemoteCredoraxTest < Test::Unit::TestCase
   end
 
   def test_successful_authorize_with_authorization_details
-    options_with_auth_details = @options.merge({authorization_type: '2', multiple_capture_count: '5' })
+    options_with_auth_details = @options.merge({ authorization_type: '2', multiple_capture_count: '5' })
     response = @gateway.authorize(@amount, @credit_card, options_with_auth_details)
     assert_success response
     assert_equal 'Succeeded', response.message
@@ -323,6 +323,19 @@ class RemoteCredoraxTest < Test::Unit::TestCase
     assert_equal 'Succeeded', response.message
 
     cft_options = { referral_cft: true, email: 'john.smith@test.com' }
+    referral_cft = @gateway.refund(@amount, response.authorization, cft_options)
+    assert_success referral_cft
+    assert_equal 'Succeeded', referral_cft.message
+    # Confirm that the operation code was `referral_cft`
+    assert_equal '34', referral_cft.params['O']
+  end
+
+  def test_successful_referral_cft_with_first_and_last_name
+    response = @gateway.purchase(@amount, @credit_card, @options)
+    assert_success response
+    assert_equal 'Succeeded', response.message
+
+    cft_options = { referral_cft: true, email: 'john.smith@test.com', first_name: 'John', last_name: 'Smith' }
     referral_cft = @gateway.refund(@amount, response.authorization, cft_options)
     assert_success referral_cft
     assert_equal 'Succeeded', referral_cft.message

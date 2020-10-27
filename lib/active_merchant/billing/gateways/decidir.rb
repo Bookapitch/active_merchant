@@ -39,16 +39,16 @@ module ActiveMerchant #:nodoc:
         76 => STANDARD_ERROR_CODE[:call_issuer],
         91 => STANDARD_ERROR_CODE[:call_issuer],
         96 => STANDARD_ERROR_CODE[:processing_error],
-        97 => STANDARD_ERROR_CODE[:processing_error],
+        97 => STANDARD_ERROR_CODE[:processing_error]
       }
 
-      def initialize(options={})
+      def initialize(options = {})
         requires!(options, :api_key)
         super
         @options[:preauth_mode] ||= false
       end
 
-      def purchase(money, payment, options={})
+      def purchase(money, payment, options = {})
         raise ArgumentError, 'Purchase is not supported on Decidir gateways configured with the preauth_mode option' if @options[:preauth_mode]
 
         post = {}
@@ -56,7 +56,7 @@ module ActiveMerchant #:nodoc:
         commit(:post, 'payments', post)
       end
 
-      def authorize(money, payment, options={})
+      def authorize(money, payment, options = {})
         raise ArgumentError, 'Authorize is not supported on Decidir gateways unless the preauth_mode option is enabled' unless @options[:preauth_mode]
 
         post = {}
@@ -64,7 +64,7 @@ module ActiveMerchant #:nodoc:
         commit(:post, 'payments', post)
       end
 
-      def capture(money, authorization, options={})
+      def capture(money, authorization, options = {})
         raise ArgumentError, 'Capture is not supported on Decidir gateways unless the preauth_mode option is enabled' unless @options[:preauth_mode]
 
         post = {}
@@ -72,18 +72,18 @@ module ActiveMerchant #:nodoc:
         commit(:put, "payments/#{authorization}", post)
       end
 
-      def refund(money, authorization, options={})
+      def refund(money, authorization, options = {})
         post = {}
         add_amount(post, money, options)
         commit(:post, "payments/#{authorization}/refunds", post)
       end
 
-      def void(authorization, options={})
+      def void(authorization, options = {})
         post = {}
         commit(:post, "payments/#{authorization}/refunds", post)
       end
 
-      def verify(credit_card, options={})
+      def verify(credit_card, options = {})
         raise ArgumentError, 'Verify is not supported on Decidir gateways unless the preauth_mode option is enabled' unless @options[:preauth_mode]
 
         MultiResponse.run(:use_first_response) do |r|
@@ -121,6 +121,7 @@ module ActiveMerchant #:nodoc:
 
         add_invoice(post, money, options)
         add_payment(post, credit_card, options)
+        add_aggregate_data(post, options) if options[:aggregate_data]
       end
 
       def add_payment_method_id(credit_card, options)
@@ -180,11 +181,35 @@ module ActiveMerchant #:nodoc:
         post[:card_data] = card_data
       end
 
+      def add_aggregate_data(post, options)
+        aggregate_data = {}
+        data = options[:aggregate_data]
+        aggregate_data[:indicator] = data[:indicator] if data[:indicator]
+        aggregate_data[:identification_number] = data[:identification_number] if data[:identification_number]
+        aggregate_data[:bill_to_pay] = data[:bill_to_pay] if data[:bill_to_pay]
+        aggregate_data[:bill_to_refund] = data[:bill_to_refund] if data[:bill_to_refund]
+        aggregate_data[:merchant_name] = data[:merchant_name] if data[:merchant_name]
+        aggregate_data[:street] = data[:street] if data[:street]
+        aggregate_data[:number] = data[:number] if data[:number]
+        aggregate_data[:postal_code] = data[:postal_code] if data[:postal_code]
+        aggregate_data[:category] = data[:category] if data[:category]
+        aggregate_data[:channel] = data[:channel] if data[:channel]
+        aggregate_data[:geographic_code] = data[:geographic_code] if data[:geographic_code]
+        aggregate_data[:city] = data[:city] if data[:city]
+        aggregate_data[:merchant_id] = data[:merchant_id] if data[:merchant_id]
+        aggregate_data[:province] = data[:province] if data[:province]
+        aggregate_data[:country] = data[:country] if data[:country]
+        aggregate_data[:merchant_email] = data[:merchant_email] if data[:merchant_email]
+        aggregate_data[:merchant_phone] = data[:merchant_phone] if data[:merchant_phone]
+        post[:aggregate_data] = aggregate_data
+      end
+
       def add_fraud_detection(options = {})
         {}.tap do |hsh|
           hsh[:send_to_cs] = options[:send_to_cs] if valid_fraud_detection_option?(options[:send_to_cs]) # true/false
           hsh[:channel] = options[:channel] if valid_fraud_detection_option?(options[:channel])
           hsh[:dispatch_method] = options[:dispatch_method] if valid_fraud_detection_option?(options[:dispatch_method])
+          hsh[:csmdds] = options[:csmdds] if valid_fraud_detection_option?(options[:csmdds])
         end
       end
 
@@ -201,7 +226,7 @@ module ActiveMerchant #:nodoc:
         }
       end
 
-      def commit(method, endpoint, parameters, options={})
+      def commit(method, endpoint, parameters, options = {})
         url = "#{(test? ? test_url : live_url)}/#{endpoint}"
 
         begin

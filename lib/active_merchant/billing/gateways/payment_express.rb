@@ -13,7 +13,7 @@ module ActiveMerchant #:nodoc:
       # VISA, Mastercard, Diners Club and Farmers cards are supported
       #
       # However, regular accounts with DPS only support VISA and Mastercard
-      self.supported_cardtypes = [:visa, :master, :american_express, :diners_club, :jcb]
+      self.supported_cardtypes = %i[visa master american_express diners_club jcb]
 
       self.supported_countries = %w[AU FJ GB HK IE MY NZ PG SG US]
 
@@ -303,8 +303,7 @@ module ActiveMerchant #:nodoc:
         # Return a response
         PaymentExpressResponse.new(response[:success] == APPROVED, message_from(response), response,
           test: response[:test_mode] == '1',
-          authorization: authorization_from(action, response)
-        )
+          authorization: authorization_from(action, response))
       end
 
       # Response XML documentation: http://www.paymentexpress.com/technical_resources/ecommerce_nonhosted/pxpost.html#XMLTxnOutput

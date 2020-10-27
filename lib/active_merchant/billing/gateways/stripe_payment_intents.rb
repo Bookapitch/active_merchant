@@ -5,7 +5,7 @@ module ActiveMerchant #:nodoc:
     # This gateway uses the current Stripe {Payment Intents API}[https://stripe.com/docs/api/payment_intents].
     # For the legacy API, see the Stripe gateway
     class StripePaymentIntentsGateway < StripeGateway
-      self.supported_countries = %w(AT AU BE BR CA CH DE DK EE ES FI FR GB GR HK IE IT JP LT LU LV MX NL NO NZ PL PT SE SG SI SK US)
+      self.supported_countries = %w(AT AU BE BG BR CA CH CY CZ DE DK EE ES FI FR GB GR HK IE IT JP LT LU LV MT MX NL NO NZ PL PT RO SE SG SI SK US)
 
       ALLOWED_METHOD_STATES = %w[automatic manual].freeze
       ALLOWED_CANCELLATION_REASONS = %w[duplicate fraudulent requested_by_customer abandoned].freeze
@@ -29,6 +29,7 @@ module ActiveMerchant #:nodoc:
         add_shipping_address(post, options)
         setup_future_usage(post, options)
         add_exemption(post, options)
+        request_three_d_secure(post, options)
 
         CREATE_INTENT_ATTRIBUTES.each do |attribute|
           add_whitelisted_attribute(post, options, attribute)
@@ -84,6 +85,21 @@ module ActiveMerchant #:nodoc:
         commit(:post, "payment_intents/#{intent_id}", post, options)
       end
 
+      def create_setup_intent(payment_method, options = {})
+        post = {}
+        add_customer(post, options)
+        payment_method = add_payment_method_token(post, payment_method, options)
+        return payment_method if payment_method.is_a?(ActiveMerchant::Billing::Response)
+
+        add_metadata(post, options)
+        add_return_url(post, options)
+        post[:on_behalf_of] = options[:on_behalf_of] if options[:on_behalf_of]
+        post[:usage] = options[:usage] if %w(on_session off_session).include?(options[:usage])
+        post[:description] = options[:description] if options[:description]
+
+        commit(:post, 'setup_intents', post, options)
+      end
+
       def authorize(money, payment_method, options = {})
         create_intent(money, payment_method, options.merge!(confirm: true, capture_method: 'manual'))
       end
@@ -112,8 +128,22 @@ module ActiveMerchant #:nodoc:
       end
 
       def refund(money, intent_id, options = {})
-        intent = commit(:get, "payment_intents/#{intent_id}", nil, options)
-        charge_id = intent.params.dig('charges', 'data')[0].dig('id')
+        if intent_id.include?('pi_')
+          intent = api_request(:get, "payment_intents/#{intent_id}", nil, options)
+
+          return Response.new(false, intent['error']['message'], intent) if intent['error']
+
+          charge_id = intent.try(:[], 'charges').try(:[], 'data').try(:[], 0).try(:[], 'id')
+
+          if charge_id.nil?
+            error_message = "No associated charge for #{intent['id']}"
+            error_message << "; payment_intent has a status of #{intent['status']}" if intent.try(:[], 'status') && intent.try(:[], 'status') != 'succeeded'
+            return Response.new(false, error_message, intent)
+          end
+        else
+          charge_id = intent_id
+        end
+
         super(money, charge_id, options)
       end
 
@@ -154,6 +184,10 @@ module ActiveMerchant #:nodoc:
         else
           super(identification, options, deprecated_options)
         end
+      end
+
+      def verify(payment_method, options = {})
+        create_setup_intent(payment_method, options.merge!(confirm: true))
       end
 
       private
@@ -234,6 +268,14 @@ module ActiveMerchant #:nodoc:
         post[:payment_method_options][:card][:moto] = true if options[:moto]
       end
 
+      def request_three_d_secure(post, options = {})
+        return unless options[:request_three_d_secure] && %w(any automatic).include?(options[:request_three_d_secure])
+
+        post[:payment_method_options] ||= {}
+        post[:payment_method_options][:card] ||= {}
+        post[:payment_method_options][:card][:request_three_d_secure] = options[:request_three_d_secure]
+      end
+
       def setup_future_usage(post, options = {})
         post[:setup_future_usage] = options[:setup_future_usage] if %w(on_session off_session).include?(options[:setup_future_usage])
         post[:off_session] = options[:off_session] if options[:off_session] && options[:confirm] == true
@@ -280,6 +322,16 @@ module ActiveMerchant #:nodoc:
         return options unless options[:idempotency_key]
 
         options.merge(idempotency_key: "#{options[:idempotency_key]}-#{suffix}")
+      end
+
+      def success_from(response, options)
+        if response['status'] == 'requires_action' && !options[:execute_threed]
+          response['error'] = {}
+          response['error']['message'] = 'Received unexpected 3DS authentication response. Use the execute_threed option to initiate a proper 3DS flow.'
+          return false
+        end
+
+        super(response, options)
       end
     end
   end

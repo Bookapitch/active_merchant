@@ -39,7 +39,13 @@ class DecidirTest < Test::Unit::TestCase
       fraud_detection: {
         send_to_cs: false,
         channel: 'Web',
-        dispatch_method: 'Store Pick Up'
+        dispatch_method: 'Store Pick Up',
+        csmdds: [
+          {
+            code: 17,
+            description: 'Campo MDD17'
+          }
+        ]
       },
       installments: 12,
       site_id: '99999999'
@@ -47,14 +53,64 @@ class DecidirTest < Test::Unit::TestCase
 
     response = stub_comms(@gateway_for_purchase, :ssl_request) do
       @gateway_for_purchase.purchase(@amount, @credit_card, @options.merge(options))
-    end.check_request do |method, endpoint, data, headers|
+    end.check_request do |_method, _endpoint, data, _headers|
       assert data =~ /"card_holder_door_number":1234/
       assert data =~ /"card_holder_birthday":"01011980"/
       assert data =~ /"type":"dni"/
       assert data =~ /"number":"123456"/
       assert data =~ /"establishment_name":"Heavenly Buffaloes"/
       assert data =~ /"site_id":"99999999"/
-      assert data =~ /"fraud_detection":{"send_to_cs":false,"channel":"Web","dispatch_method":"Store Pick Up"}/
+      assert data =~ /"fraud_detection":{"send_to_cs":false,"channel":"Web","dispatch_method":"Store Pick Up","csmdds":\[{"code":17,"description":"Campo MDD17"}\]}/
+    end.respond_with(successful_purchase_response)
+
+    assert_equal 7719132, response.authorization
+    assert_equal 'approved', response.message
+    assert response.test?
+  end
+
+  def test_successful_purchase_with_aggregate_data
+    options = {
+      aggregate_data: {
+        indicator: 1,
+        identification_number: '308103480',
+        bill_to_pay: 'test1',
+        bill_to_refund: 'test2',
+        merchant_name: 'Heavenly Buffaloes',
+        street: 'Sesame',
+        number: '123',
+        postal_code: '22001',
+        category: 'yum',
+        channel: '005',
+        geographic_code: 'C1234',
+        city: 'Ciudad de Buenos Aires',
+        merchant_id: 'dec_agg',
+        province: 'Buenos Aires',
+        country: 'Argentina',
+        merchant_email: 'merchant@mail.com',
+        merchant_phone: '2678433111'
+      }
+    }
+
+    response = stub_comms(@gateway_for_purchase, :ssl_request) do
+      @gateway_for_purchase.purchase(@amount, @credit_card, @options.merge(options))
+    end.check_request do |_method, _endpoint, data, _headers|
+      assert data =~ /"aggregate_data":{"indicator":1/
+      assert data =~ /"identification_number":"308103480"/
+      assert data =~ /"bill_to_pay":"test1"/
+      assert data =~ /"bill_to_refund":"test2"/
+      assert data =~ /"merchant_name":"Heavenly Buffaloes"/
+      assert data =~ /"street":"Sesame"/
+      assert data =~ /"number":"123"/
+      assert data =~ /"postal_code":"22001"/
+      assert data =~ /"category":"yum"/
+      assert data =~ /"channel":"005"/
+      assert data =~ /"geographic_code":"C1234"/
+      assert data =~ /"city":"Ciudad de Buenos Aires"/
+      assert data =~ /"merchant_id":"dec_agg"/
+      assert data =~ /"province":"Buenos Aires"/
+      assert data =~ /"country":"Argentina"/
+      assert data =~ /"merchant_email":"merchant@mail.com"/
+      assert data =~ /"merchant_phone":"2678433111"/
     end.respond_with(successful_purchase_response)
 
     assert_equal 7719132, response.authorization
@@ -302,7 +358,7 @@ class DecidirTest < Test::Unit::TestCase
 
     stub_comms(@gateway_for_purchase, :ssl_request) do
       @gateway_for_purchase.purchase(@amount, visa_debit_card, debit_options)
-    end.check_request do |method, endpoint, data, headers|
+    end.check_request do |_method, _endpoint, data, _headers|
       assert_match(/"payment_method_id":31/, data)
     end.respond_with(successful_purchase_response)
   end
@@ -314,7 +370,7 @@ class DecidirTest < Test::Unit::TestCase
 
     stub_comms(@gateway_for_purchase, :ssl_request) do
       @gateway_for_purchase.purchase(@amount, mastercard, debit_options)
-    end.check_request do |method, endpoint, data, headers|
+    end.check_request do |_method, _endpoint, data, _headers|
       assert_match(/"payment_method_id":105/, data)
     end.respond_with(successful_purchase_response)
   end
@@ -326,7 +382,7 @@ class DecidirTest < Test::Unit::TestCase
 
     stub_comms(@gateway_for_purchase, :ssl_request) do
       @gateway_for_purchase.purchase(@amount, maestro_card, debit_options)
-    end.check_request do |method, endpoint, data, headers|
+    end.check_request do |_method, _endpoint, data, _headers|
       assert_match(/"payment_method_id":106/, data)
     end.respond_with(successful_purchase_response)
   end
@@ -338,7 +394,7 @@ class DecidirTest < Test::Unit::TestCase
 
     stub_comms(@gateway_for_purchase, :ssl_request) do
       @gateway_for_purchase.purchase(@amount, cabal_card, debit_options)
-    end.check_request do |method, endpoint, data, headers|
+    end.check_request do |_method, _endpoint, data, _headers|
       assert_match(/"payment_method_id":108/, data)
     end.respond_with(successful_purchase_response)
   end

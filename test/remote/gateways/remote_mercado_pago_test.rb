@@ -7,30 +7,28 @@ class RemoteMercadoPagoTest < Test::Unit::TestCase
     @colombian_gateway = MercadoPagoGateway.new(fixtures(:mercado_pago_colombia))
 
     @amount = 500
-    @credit_card = credit_card('4509953566233704')
+    @credit_card = credit_card('5031433215406351')
     @colombian_card = credit_card('4013540682746260')
     @elo_credit_card = credit_card('5067268650517446',
       month: 10,
       year: 2020,
       first_name: 'John',
       last_name: 'Smith',
-      verification_value: '737'
-    )
-    @cabal_credit_card = credit_card('6035227716427021',
+      verification_value: '737')
+    @cabal_credit_card = credit_card('6042012045809847',
       month: 10,
       year: 2020,
       first_name: 'John',
       last_name: 'Smith',
-      verification_value: '737'
-    )
+      verification_value: '737')
     @naranja_credit_card = credit_card('5895627823453005',
       month: 10,
       year: 2020,
       first_name: 'John',
       last_name: 'Smith',
-      verification_value: '123'
-    )
-    @declined_card = credit_card('4000300011112220')
+      verification_value: '123')
+    @declined_card = credit_card('5031433215406351',
+      first_name: 'OTHE')
     @options = {
       billing_address: address,
       shipping_address: address,
@@ -42,7 +40,8 @@ class RemoteMercadoPagoTest < Test::Unit::TestCase
       processing_mode: 'gateway',
       merchant_account_id: fixtures(:mercado_pago)[:merchant_account_id],
       fraud_scoring: true,
-      fraud_manual_review: true
+      fraud_manual_review: true,
+      payment_method_option_id: '123abc'
     }
   end
 
@@ -105,6 +104,12 @@ class RemoteMercadoPagoTest < Test::Unit::TestCase
     response = @colombian_gateway.purchase(amount, @colombian_card, @options)
     assert_success response
     assert_equal 'accredited', response.message
+  end
+
+  def test_successful_purchase_with_notification_url
+    response = @gateway.purchase(@amount, @credit_card, @options.merge(notification_url: 'https://www.spreedly.com/'))
+    assert_success response
+    assert_equal 'https://www.spreedly.com/', response.params['notification_url']
   end
 
   def test_failed_purchase
